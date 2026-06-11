@@ -1,9 +1,10 @@
 """Churn model: gradient boosting on behavioural snapshot features.
 
-Honest setup: train on two historic snapshots (weeks 58 and 64), evaluate
-out-of-time on week 70 (labels = the six weeks after each snapshot), then
-score "now" (week 78) for the live risk list. Ground-truth fields like
-`churn_start` are never used as features — only observable behaviour.
+Honest setup: train on three historic snapshots (weeks 50, 58, 64), evaluate
+out-of-time on pooled snapshots 68 & 71 (labels = the six weeks after each
+snapshot), then score "now" (week 78) for the live risk list. Ground-truth
+fields like `churn_start` are never used as features — only observable
+behaviour.
 """
 from __future__ import annotations
 
@@ -13,8 +14,8 @@ from sklearn.metrics import roc_auc_score
 
 from .data import churn_label, features, is_active
 
-TRAIN_SNAPSHOTS = (58, 64)
-TEST_SNAPSHOT = 70
+TRAIN_SNAPSHOTS = (50, 58, 64)
+TEST_SNAPSHOTS = (68, 71)  # pooled for a stabler out-of-time AUC
 NUMERIC = ("recency_w", "orders_4w", "orders_12w", "freq_trend", "basket_12w",
            "basket_trend", "cats_4w", "cats_lost", "issues_8w", "shock_share",
            "tenure_w", "value_52w")
@@ -44,7 +45,8 @@ def _design(df):
 def train(scenario) -> dict:
     train_df = pd.concat([_frame(scenario, w) for w in TRAIN_SNAPSHOTS],
                          ignore_index=True)
-    test_df = _frame(scenario, TEST_SNAPSHOT)
+    test_df = pd.concat([_frame(scenario, w) for w in TEST_SNAPSHOTS],
+                        ignore_index=True)
 
     clf = HistGradientBoostingClassifier(
         max_depth=3, learning_rate=0.08, max_iter=250,

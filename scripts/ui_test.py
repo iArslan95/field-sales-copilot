@@ -21,11 +21,17 @@ def main():
     at.run()
     assert not at.exception, f"app raised: {at.exception}"
     assert len(at.metric) == 4, f"expected 4 KPI metrics, got {len(at.metric)}"
-    assert len(at.chat_input) == 1, "copilot chat input should render"
-    assert len(at.button) >= 3, "suggestion chips should render"
-    assert at.session_state["chat"], "briefing message should be seeded"
-    first = at.session_state["chat"][0]
+    assert len(at.chat_input) == 3, \
+        f"expected 3 copilot inputs (main + 2 specialists), got {len(at.chat_input)}"
+    assert len(at.button) >= 9, "suggestion chips should render on every panel"
+    assert at.session_state["chat_main"], "briefing message should be seeded"
+    first = at.session_state["chat_main"][0]
     assert first["role"] == "assistant" and "risk" in first["content"]
+
+    # An outlet pick in the explorer must not crash the app.
+    at.selectbox[0].select(at.selectbox[0].options[1])
+    at.run()
+    assert not at.exception, f"outlet explorer raised: {at.exception}"
     print("metrics:", " | ".join(f"{m.label}={m.value}" for m in at.metric))
     print("UI TEST OK")
 

@@ -1,8 +1,11 @@
 """Synthetic CPG order data for a field-sales territory (Rotterdam region).
 
-One scenario = 78 weeks of weekly orders from a few hundred small retail
-outlets (neighbourhood supermarkets, night shops, tokos, food-service,
-forecourt shops) buying a fictional CPG portfolio across six categories.
+One scenario = 78 weeks of weekly wholesale orders (case quantities) from a
+few hundred small retail outlets (neighbourhood supermarkets, night shops,
+tokos, food-service, forecourt shops) buying a Unilever-style portfolio:
+Knorr, Unox, Hellmann's, Calvé, Conimex, Cif, Domestos, Sun, Robijn, Omo,
+Dove, Axe, Rexona, Andrélon, Tresemmé. Brand names are recognisable flavour
+only — every outlet, price, case size and volume is fictional.
 
 The data is generated with real latent structure, so the models have
 something genuine to learn:
@@ -23,7 +26,7 @@ from dataclasses import dataclass
 
 WEEKS = 78          # week 78 = "now"
 PRICE_SHOCK_WEEK = 58
-SHOCKED_CATEGORIES = ("Sauzen", "Personal care")
+SHOCKED_CATEGORIES = ("Sauzen & spreads", "Personal care")
 
 SEGMENTS = {
     # segment: (share, weekly order prob, basket scale)
@@ -58,36 +61,43 @@ NAME_POOLS = {
                     "Motorpoort Shop", "Tank & Go Ring"),
 }
 
-# category: (season, price range) — season bends the demand curve.
+# category: (season, wholesale CASE price range in EUR) — season bends demand.
+# Portfolio mirrors Unilever's current categories (foods, home care, personal
+# care — tea and ice cream were divested/spun off). Brand names are used as
+# recognisable flavour only; cases, prices and volumes are fictional.
 CATEGORIES = {
-    "Thee": ("winter", (2.2, 3.5)),
-    "Bouillon & soep": ("winter", (1.8, 3.0)),
-    "Sauzen": ("summer", (2.0, 4.0)),
-    "Wasmiddel": (None, (6.0, 11.0)),
-    "Personal care": (None, (3.0, 6.0)),
-    "IJs": ("summer", (4.0, 7.0)),
+    "Bouillon & maaltijd": ("winter", (20.0, 35.0)),
+    "Soep": ("winter", (18.0, 30.0)),
+    "Sauzen & spreads": ("summer", (25.0, 45.0)),
+    "Schoonmaak": (None, (22.0, 40.0)),
+    "Wasmiddel": (None, (35.0, 60.0)),
+    "Personal care": (None, (30.0, 55.0)),
 }
 
 SKU_NAMES = {
-    "Thee": ("Bremer Earl Grey", "Bremer Groene Thee", "Bremer Rooibos",
-             "Bremer Citroen", "Thejo Zwarte Thee", "Thejo Munt",
-             "Thejo Kamille", "Thejo Gember"),
-    "Bouillon & soep": ("Goudbouillon Kip", "Goudbouillon Runder",
-                        "Goudbouillon Groente", "Goudbouillon Vis",
-                        "SoepNu Tomaat", "SoepNu Champignon", "SoepNu Erwten",
-                        "SoepNu Kip"),
-    "Sauzen": ("Mayolin Mayonaise", "Mayolin Fritessaus", "Mayolin Truffelmayo",
-               "Delisaus Curry", "Delisaus Ketchup", "Delisaus Knoflook",
-               "Delisaus Samurai", "Delisaus Piri Piri"),
-    "Wasmiddel": ("Wasko Color", "Wasko Wit", "Wasko Zwart", "Wasko Sport",
-                  "Linnea Vloeibaar", "Linnea Pods", "Linnea Sensitive",
-                  "Linnea Wol"),
-    "Personal care": ("Fresqo Deo Roller", "Fresqo Deo Spray", "Fresqo Douchegel",
-                      "Fresqo Scrub", "Velura Shampoo", "Velura Conditioner",
-                      "Velura Handzeep", "Velura Bodylotion"),
-    "IJs": ("Polario Vanille", "Polario Chocolade", "Polario Aardbei",
-            "Polario Hazelnoot", "Scoopy Cookies", "Scoopy Caramel",
-            "Scoopy Mango", "Scoopy Pistache"),
+    "Bouillon & maaltijd": ("Knorr Bouillon Kip", "Knorr Bouillon Groente",
+                            "Knorr Bouillon Rund", "Knorr Wereldgerechten Nasi",
+                            "Knorr Wereldgerechten Bami", "Knorr Mix Macaroni",
+                            "Knorr Pasta Pronto", "Knorr Aromat"),
+    "Soep": ("Unox Tomatensoep", "Unox Erwtensoep", "Unox Kippensoep",
+             "Unox Chinese Tomatensoep", "Unox Goulashsoep", "Unox Rookworst",
+             "Cup-a-Soup Tomaat", "Cup-a-Soup Kip"),
+    "Sauzen & spreads": ("Hellmann's Real Mayonnaise", "Hellmann's Vegan Mayo",
+                         "Calvé Pindakaas", "Calvé Fritessaus", "Calvé Curry",
+                         "Conimex Sambal Oelek", "Conimex Satésaus",
+                         "Conimex Ketjap Manis"),
+    "Schoonmaak": ("Cif Cream Original", "Cif Spray Keuken",
+                   "Cif Spray Badkamer", "Domestos Bleek Original",
+                   "Domestos Power Fresh", "Sun All-in-1 Tabs",
+                   "Sun Classic Tabs", "Sun Glansspoelmiddel"),
+    "Wasmiddel": ("Robijn Klein & Krachtig Color", "Robijn Klein & Krachtig Wit",
+                  "Robijn Klein & Krachtig Zwart", "Robijn Wasverzachter Rosé",
+                  "Robijn Wasverzachter Puur", "Robijn Vlekverwijderaar",
+                  "Omo Vloeibaar", "Omo Capsules"),
+    "Personal care": ("Dove Deo Roller", "Dove Douchegel", "Axe Africa Deo",
+                      "Axe Douchegel Dark Temptation", "Rexona Men Deo",
+                      "Andrélon Shampoo Klassiek", "Andrélon Conditioner",
+                      "Tresemmé Keratin Smooth"),
 }
 
 
@@ -161,10 +171,10 @@ def generate(seed: int, n_outlets: int = 300) -> dict:
 
         roll = rng.random()
         churn_start = 0
-        if roll < 0.18:
+        if roll < 0.20:
             churn_start = rng.randint(52, 74)      # the decay we must catch
-        elif roll < 0.24:
-            churn_start = rng.randint(20, 45)      # historic churners (training)
+        elif roll < 0.27:
+            churn_start = rng.randint(20, 44)      # historic churners (training)
 
         outlet = Outlet(
             id=f"OUT-{1000 + i}", name=name, segment=seg,
@@ -200,10 +210,10 @@ def generate(seed: int, n_outlets: int = 300) -> dict:
             and any(s not in prefs[outlet.id][cat] for s in seg_popular[seg][cat])
         ]
         events = {}
-        for cat in rng.sample(candidates, k=min(len(candidates), rng.randint(1, 3))):
+        for cat in rng.sample(candidates, k=min(len(candidates), rng.randint(2, 4))):
             extra = next(s for s in seg_popular[seg][cat]
                          if s not in prefs[outlet.id][cat])
-            events[cat] = (rng.randint(24, 76), extra)
+            events[cat] = (rng.randint(24, 74), extra)
         adoptions[outlet.id] = events
 
     orders = {o.id: {} for o in outlets}
@@ -213,7 +223,7 @@ def generate(seed: int, n_outlets: int = 300) -> dict:
         for w in range(o.start_week, WEEKS + 1):
             p = order_p
             if o.churn_start and w >= o.churn_start:
-                p *= 0.80 ** (w - o.churn_start)
+                p *= 0.75 ** (w - o.churn_start)
             if w in o.issue_weeks:
                 p *= 0.45
             if rng.random() > p:
@@ -231,7 +241,7 @@ def generate(seed: int, n_outlets: int = 300) -> dict:
                 if adopted and w >= adopted[0]:
                     chosen.append(adopted[1])
                 if rng.random() < 0.12:  # occasional exploration
-                    pool = seg_popular[o.segment][cat] if rng.random() < 0.7 \
+                    pool = seg_popular[o.segment][cat] if rng.random() < 0.75 \
                         else by_cat[cat]
                     chosen.append(rng.choice(pool))
                 for sku in chosen:
@@ -248,16 +258,21 @@ def generate(seed: int, n_outlets: int = 300) -> dict:
 
 # Baseline appetite of each segment per category (0..1-ish).
 SEGMENT_AFFINITY = {
-    "Buurtsuper": {"Thee": 0.75, "Bouillon & soep": 0.70, "Sauzen": 0.80,
-                   "Wasmiddel": 0.65, "Personal care": 0.70, "IJs": 0.60},
-    "Avondwinkel": {"Thee": 0.35, "Bouillon & soep": 0.30, "Sauzen": 0.60,
-                    "Wasmiddel": 0.25, "Personal care": 0.50, "IJs": 0.80},
-    "Toko & speciaalzaak": {"Thee": 0.80, "Bouillon & soep": 0.75, "Sauzen": 0.70,
-                            "Wasmiddel": 0.30, "Personal care": 0.45, "IJs": 0.35},
-    "Horeca": {"Thee": 0.65, "Bouillon & soep": 0.85, "Sauzen": 0.90,
-               "Wasmiddel": 0.10, "Personal care": 0.15, "IJs": 0.70},
-    "Tankstation": {"Thee": 0.30, "Bouillon & soep": 0.35, "Sauzen": 0.55,
-                    "Wasmiddel": 0.15, "Personal care": 0.55, "IJs": 0.85},
+    "Buurtsuper": {"Bouillon & maaltijd": 0.70, "Soep": 0.75,
+                   "Sauzen & spreads": 0.80, "Schoonmaak": 0.60,
+                   "Wasmiddel": 0.65, "Personal care": 0.70},
+    "Avondwinkel": {"Bouillon & maaltijd": 0.30, "Soep": 0.50,
+                    "Sauzen & spreads": 0.55, "Schoonmaak": 0.20,
+                    "Wasmiddel": 0.20, "Personal care": 0.50},
+    "Toko & speciaalzaak": {"Bouillon & maaltijd": 0.85, "Soep": 0.50,
+                            "Sauzen & spreads": 0.85, "Schoonmaak": 0.30,
+                            "Wasmiddel": 0.30, "Personal care": 0.45},
+    "Horeca": {"Bouillon & maaltijd": 0.90, "Soep": 0.80,
+               "Sauzen & spreads": 0.90, "Schoonmaak": 0.55,
+               "Wasmiddel": 0.05, "Personal care": 0.10},
+    "Tankstation": {"Bouillon & maaltijd": 0.25, "Soep": 0.60,
+                    "Sauzen & spreads": 0.45, "Schoonmaak": 0.15,
+                    "Wasmiddel": 0.10, "Personal care": 0.55},
 }
 
 

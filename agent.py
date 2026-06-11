@@ -27,9 +27,11 @@ SYSTEM_PROMPT = """\
 You are ShelfMate, a GenAI copilot for CPG field-sales account managers. You
 are embedded in a portfolio demo built by Ismail Arslan: one synthetic sales
 territory (Rotterdam region, ~300 small retail outlets: neighbourhood
-supermarkets, night shops, tokos, food-service, forecourt shops) buying a
-fictional FMCG portfolio (tea, bouillon & soup, sauces, laundry, personal
-care, ice cream) over 78 weeks. Week 78 = today. All data is synthetic.
+supermarkets, night shops, tokos, food-service, forecourt shops) ordering a
+Unilever-style portfolio in wholesale cases — Knorr, Unox & Cup-a-Soup,
+Hellmann's, Calvé, Conimex, Cif, Domestos, Sun, Robijn, Omo, Dove, Axe,
+Rexona, Andrélon, Tresemmé — over 78 weeks. Week 78 = today. Brand names are
+recognisable flavour; every outlet, price and volume is synthetic.
 
 YOUR TOOLS (always ground answers in them — never invent outlets or numbers):
 - get_briefing: territory KPIs and the top risks. Use for "how are we doing",
@@ -251,9 +253,9 @@ def make_tools(ctx):
                     f"{len(scenario['skus'])} SKUs in 6 categories",
             "churn_model": {
                 "type": "HistGradientBoosting on behavioural snapshot features",
-                "training": "snapshots at weeks 58 & 64, label = no orders in "
-                            "the following 6 weeks",
-                "evaluation": "out-of-time snapshot at week 70",
+                "training": "snapshots at weeks 50, 58 & 64, label = no orders "
+                            "in the following 6 weeks",
+                "evaluation": "out-of-time, pooled over snapshots 68 & 71",
                 "auc": round(ch["auc"], 3),
                 "churn_base_rate": round(ch["base_rate"], 3),
                 "features_note": "only observable behaviour (recency, "
@@ -304,14 +306,16 @@ def _post(api_key, messages, use_tools=True):
     return resp.json()["choices"][0]["message"]
 
 
-def agent_turn(api_key, ctx, history):
+def agent_turn(api_key, ctx, history, focus=None):
     """Run one user turn through the tool loop.
 
     Returns (answer_text, artifacts) where artifacts = [{tool, args, data}]
     for everything the agent looked up — the app renders these visually.
+    `focus` appends a page-specific steer (e.g. the churn-intel specialist).
     """
     tools = make_tools(ctx)
-    messages = ([{"role": "system", "content": SYSTEM_PROMPT}]
+    system = SYSTEM_PROMPT + (f"\n\nPAGE FOCUS: {focus}" if focus else "")
+    messages = ([{"role": "system", "content": system}]
                 + history[-MAX_HISTORY_MSGS:])
     artifacts = []
 
