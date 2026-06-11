@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 
 import requests
 
@@ -19,8 +21,12 @@ from engine.recommender import recommend
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
+# The free tier caps tokens-per-minute PER MODEL, so a smaller model is a
+# separate budget — if the 70B is rate-limited after retries, we degrade
+# gracefully instead of erroring out mid-demo.
+GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
 MAX_TOOL_ROUNDS = 4
-MAX_HISTORY_MSGS = 10
+MAX_HISTORY_MSGS = 6
 MAX_USER_MESSAGES = 25
 
 SYSTEM_PROMPT = """\
@@ -289,21 +295,53 @@ def make_tools(ctx):
 
 # ------------------------------------------------------------- agent loop
 
+def _suggested_wait(resp) -> float:
+    """How long Groq asks us to wait on a 429 (header or message text)."""
+    retry_after = resp.headers.get("retry-after")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+    m = re.search(r"try again in ([0-9.]+)s", resp.text)
+    return float(m.group(1)) if m else 3.0
+
+
 def _post(api_key, messages, use_tools=True):
-    payload = {
-        "model": GROQ_MODEL,
-        "messages": messages,
-        "temperature": 0.25,
-        "max_tokens": 900,
-    }
-    if use_tools:
-        payload["tools"] = TOOLS_SPEC
-        payload["tool_choice"] = "auto"
-    resp = requests.post(GROQ_URL, json=payload, timeout=60,
-                         headers={"Authorization": f"Bearer {api_key}"})
-    if resp.status_code != 200:
-        raise RuntimeError(f"Groq API {resp.status_code}: {resp.text[:300]}")
-    return resp.json()["choices"][0]["message"]
+    """One chat completion, resilient to free-tier hiccups: retry on 429
+    (Groq tells us how long to wait), then fall back to a smaller model with
+    its own rate budget before giving up."""
+    attempts = (GROQ_MODEL, GROQ_MODEL, GROQ_FALLBACK_MODEL)
+    last = "unknown error"
+    for i, model in enumerate(attempts):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.25,
+            "max_tokens": 700,
+        }
+        if use_tools:
+            payload["tools"] = TOOLS_SPEC
+            payload["tool_choice"] = "auto"
+        resp = requests.post(GROQ_URL, json=payload, timeout=60,
+                             headers={"Authorization": f"Bearer {api_key}"})
+        if resp.status_code == 200:
+            return resp.json()["choices"][0]["message"]
+        last = f"Groq API {resp.status_code}: {resp.text[:200]}"
+        if i == len(attempts) - 1:
+            break
+        if resp.status_code == 429:
+            time.sleep(min(_suggested_wait(resp) + 0.4, 9.0))
+        elif resp.status_code >= 500:
+            time.sleep(1.5)
+        else:
+            break  # 4xx other than 429: retrying won't help
+    if "429" in last:
+        raise RuntimeError(
+            "the free Groq tier hit its tokens-per-minute limit and stayed "
+            "busy after retries. Give it ~30 seconds and ask again — nothing "
+            "is lost.")
+    raise RuntimeError(last)
 
 
 def agent_turn(api_key, ctx, history, focus=None):
@@ -341,7 +379,7 @@ def agent_turn(api_key, ctx, history, focus=None):
             artifacts.append({"tool": name, "args": args, "data": data})
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "name": name,
-                             "content": json.dumps(data)[:7000]})
+                             "content": json.dumps(data)[:4000]})
 
     final = _post(api_key, messages, use_tools=False)
     return final.get("content") or "", artifacts
